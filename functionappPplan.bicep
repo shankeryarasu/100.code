@@ -1,5 +1,5 @@
 /*
- * Premium Azure function app.
+ * Premium Azure function app with the "EP1" SKU.
  */
 
 @description('App name')
