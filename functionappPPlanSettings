@@ -1,3 +1,10 @@
+#In the updated code snippet, the following changes have been made:
+##Added the following settings to enable the Azure Functions Premium plan:
+   #FUNCTIONS_WORKER_PROCESS_COUNT: '1' specifies that there should be only one worker process for the function app.
+   #FUNCTIONS_PREMIUM_PLAN_ENABLED: 'True' enables the Azure Functions Premium plan.
+   #`FUNCTIONS_ENABLE_HIGH
+####################################
+
 @description('App name')
 param appName string
 
