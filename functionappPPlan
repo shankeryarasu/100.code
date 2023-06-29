@@ -1,81 +1,69 @@
-resource functionApp 'Microsoft.Web/sites' = {
-  name: 'myFunctionApp'
-  location: resourceGroup().location
-  kind: 'functionapp'
-  properties: {
-    siteConfig: {
-      appSettings: [
-        {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: '[reference(resourceId('Microsoft.Insights/components', 'myAppInsights'), '2015-05-01').InstrumentationKey]'
-        },
-        {
-          name: 'AzureWebJobsStorage'
-          value: '[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', storageAccountName, environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', storageAccountName), '2022-05-01').keys[0].value)]'
-        },
-        {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: '[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', storageAccountName, environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', storageAccountName), '2022-05-01').keys[0].value)]'
-        },
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(functionAppName)
-        },
-        {
-          name: 'FUNCTIONS_EXTENSION_VERSION'
-          value: '~4'
-        },
-        {
-          name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: functionWorkerRuntime
-        },
-        {
-          name: 'WEBSITE_NODE_DEFAULT_VERSION'
-          value: '~14'
-        },
-        {
-          name: 'WEBSITE_RUN_FROM_PACKAGE'
-          value: '1'
-        }
-      ]
+@description('App name')
+param appName string
+
+@description('Project subscription ID')
+param subscriptionId string
+
+@description('Location for all resources')
+param location string
+
+@description('The environment the resources are being deployed to.')
+param env string
+
+@description('List of any appSettings to add to the logic app (e.g [{"name": "<>", "value": "<>"}])')
+param appSettings object = {}
+
+@description('Insights name')
+param insightsName string
+
+@description('App storage account name')
+param storageName string
+
+@description('Azure Functions runtime')
+param functionVersion string = '~4'
+
+@description('Function language worker runtime')
+param functionRuntime string = 'dotnet'
+
+@description('The maximum number of sessions that can be handled concurrently per scaled instance. This setting only applies for functions that receive a single message at a time.')
+param serviceBusMaxConcurrentSessions int = 16
+
+@description('The maximum amount of time to wait for a message to be received for the currently active session. After this time has elapsed, the processor will close the session and attempt to process another session. This setting only applies for functions that receive a single message at a time.')
+param serviceBusSessionIdleTimeout string = '0:00:10'
+
+resource insights 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: insightsName
+}
+
+resource storageAccount 'Microsoft.Storage/storageAccounts@2022-05-01' existing = {
+  name: storageName
+}
+
+resource siteAppSettings 'Microsoft.Web/sites/config@2022-09-01' = {
+  name: '${appName}/appsettings'
+  kind: 'string'
+  properties: union(
+    appSettings,
+    {
+      FUNCTIONS_EXTENSION_VERSION: functionVersion
+      FUNCTIONS_WORKER_RUNTIME: functionRuntime
+      APPINSIGHTS_INSTRUMENTATIONKEY: insights.properties.InstrumentationKey
+      APPLICATIONINSIGHTS_CONNECTION_STRING: insights.properties.ConnectionString
+      WEBSITE_CONTENTAZUREFILECONNECTIONSTRING: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage};'
+      AzureWebJobsStorage: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage};'
+      WEBSITE_CONTENTSHARE: appName
+      WEBSITE_CONTENTOVERVNET: '1'
+      FUNCTIONS_WORKER_PROCESS_COUNT: '1'
+      FUNCTIONS_PREMIUM_PLAN_ENABLED: 'True'
+      FUNCTIONS_ENABLE_HIGH_DENSITY_MULTIPLY: 'True'
+      FUNCTIONS_WORKER_SKIP_AZURE_INTERNAL_ROUTING: 'True'
+      FUNCTIONS_PRELOAD_METADATA: 'True'
+      AzureFunctionsJobHost__extensions__serviceBus__maxConcurrentSessions: serviceBusMaxConcurrentSessions
+      AzureFunctionsJobHost__extensions__serviceBus__sessionIdleTimeout: serviceBusSessionIdleTimeout
+      subscriptionId: subscriptionId
+      resourceGroup: resourceGroup().name
+      resourceLocation: location
+      env: env
     }
-  }
-}
-
-resource storageAccount 'Microsoft.Storage/storageAccounts' = {
-  name: storageAccountName
-  location: resourceGroup().location
-  sku: {
-    name: storageAccountType
-  }
-  kind: 'Storage'
-}
-
-resource hostingPlan 'Microsoft.Web/serverfarms' = {
-  name: hostingPlanName
-  location: resourceGroup().location
-  sku: {
-    tier: 'ElasticPremium'
-    name: functionAppPlanSku
-    family: 'EP'
-  }
-  properties: {
-    maximumElasticWorkerCount: 20
-    reserved: isReserved
-  }
-}
-
-resource applicationInsights 'Microsoft.Insights/components' = {
-  name: applicationInsightsName
-  location: resourceGroup().location
-  properties: {
-    Application_Type: 'web'
-  }
-}
-
-resource zipDeploymentExtension 'Microsoft.Web/sites/extensions' = {
-  name: format('{0}/{1}', functionAppName, 'zipdeploy')
-  properties: {
-    packageUri: packageUri
-  }
+  )
 }
